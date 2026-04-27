@@ -4,33 +4,33 @@ from pdf2image import convert_from_path
 import pytesseract
 
 # ==========================
-# CONFIGURAÇÕES
+#       CONFIGURAÇÕES
 # ==========================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 👉 Pasta onde estão os PDFs
+# Pasta onde estão os PDFs
 PASTA_PDFS = os.path.join(BASE_DIR, "Documentos")
 
-# 👉 Poppler dentro do projeto
+
 POPPLER_PATH = os.path.join(BASE_DIR, "poppler", "Library", "bin")
 
-# 👉 Tesseract dentro do projeto
+# Tesseract dentro do projeto
 TESSERACT_PATH = os.path.join(BASE_DIR, "Tesseract-OCR", "tesseract.exe")
 TESSDATA_PATH = os.path.join(BASE_DIR, "Tesseract-OCR", "tessdata")
 
-# 👉 Configuração do pytesseract
+# Configuração do pytesseract
 pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
 os.environ["TESSDATA_PREFIX"] = TESSDATA_PATH
 
-# 👉 Verificação (evita erro silencioso)
+#  Verificação 
 if not os.path.exists(TESSERACT_PATH):
     print(f"❌ Tesseract não encontrado em:\n{TESSERACT_PATH}")
     input("Pressione ENTER para sair...")
     exit()
 
 # ==========================
-# FUNÇÕES
+#         FUNÇÕES
 # ==========================
 
 def extrair_texto_pdf(caminho_pdf):
@@ -84,7 +84,7 @@ def ja_esta_no_formato(nome_arquivo):
 
 def renomear_arquivo(caminho, cpf, data):
     pasta = os.path.dirname(caminho)
-    extensao = os.path.splitext(caminho)[1]  # mantém .pdf
+    extensao = os.path.splitext(caminho)[1]  
 
     novo_nome = f"{cpf} - {data}"
     novo_caminho = os.path.join(pasta, novo_nome + extensao)
@@ -97,7 +97,7 @@ def renomear_arquivo(caminho, cpf, data):
 
 
 # ==========================
-# EXECUÇÃO
+#         EXECUÇÃO
 # ==========================
 
 print("🚀 Iniciando processamento...\n")
@@ -138,4 +138,4 @@ for arquivo in arquivos:
     else:
         print(f"❌ CPF ou data não encontrados em: {arquivo}")
 
-print("\n🎉 Finalizado!")
+print("\n Finalizado!")
