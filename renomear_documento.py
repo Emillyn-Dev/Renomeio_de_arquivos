@@ -100,7 +100,7 @@ def renomear_arquivo(caminho, cpf, data):
 #         EXECUÇÃO
 # ==========================
 
-print("🚀 Iniciando processamento...\n")
+print("Iniciando processamento...\n")
 
 if not os.path.exists(PASTA_PDFS):
     print(f"❌ Pasta não encontrada: {PASTA_PDFS}")
