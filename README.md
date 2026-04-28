@@ -4,7 +4,7 @@ Lê o arquivo e renomeia de forma personalizada.
 
 Este projeto é um script em Python que automatiza a leitura e organização de arquivos PDF utilizando OCR (Reconhecimento Óptico de Caracteres). Ele extrai informações específicas — como CPF e data — diretamente do conteúdo dos documentos e renomeia os arquivos de forma padronizada. <br>
 
-🚀 Funcionalidades
+🚀 Funcionalidades <br>
 🔍 Leitura de PDFs (inclusive arquivos escaneados) <br>
 🧠 Extração de texto via OCR com suporte a português <br>
 🪪 Identificação automática de CPF <br>
