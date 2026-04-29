@@ -1,0 +1,235 @@
+import os
+import re
+import shutil
+import logging
+from pdf2image import convert_from_path
+import pytesseract
+
+# ==========================
+# CONFIGURAÇÕES
+# ==========================
+# ⚠️ ATENÇÃO: As variáveis abaixo precisam ser ajustadas ao usar em outro computador!
+#
+# BASE_DIR: Detecta automaticamente a pasta onde este script está salvo.
+# Não precisa alterar.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# PASTA_PDFS: Pasta onde ficam os PDFs a serem renomeados.
+# O código assume que existe uma pasta chamada "Documentos" na mesma pasta do script.
+# ⚠️ Se a pasta tiver outro nome ou estiver em outro lugar, altere aqui.
+PASTA_PDFS = os.path.join(BASE_DIR, "Documentos")
+
+# PASTA_SEM_CPF: Pasta para onde os PDFs sem CPF serão movidos.
+# ⚠️ ALTERAR para o caminho correto no novo computador.
+# Exemplo: r"C:\Users\SEU_USUARIO\Desktop\Documentos\Sem CPF"
+PASTA_SEM_CPF = r"C:\Users\emill\Desktop\Programação\Rede_Dor\Renomear_Documento\Documentos\Sem CPF"
+
+# POPPLER_PATH: Caminho para a ferramenta Poppler, usada para converter PDF em imagem.
+# ⚠️ O Poppler precisa estar instalado no novo computador.
+# Aqui ele está dentro de uma pasta "poppler" junto com o script.
+# Se estiver instalado em outro lugar, ajuste o caminho.
+POPPLER_PATH = os.path.join(BASE_DIR, "poppler", "Library", "bin")
+
+# TESSERACT_PATH: Caminho para o executável do Tesseract OCR, que lê o texto das imagens.
+# ⚠️ O Tesseract precisa estar instalado no novo computador.
+# Aqui ele está numa pasta "Tesseract-OCR" junto com o script.
+# Se estiver instalado em outro lugar (ex: C:\Program Files\Tesseract-OCR\tesseract.exe), ajuste aqui.
+TESSERACT_PATH = os.path.join(BASE_DIR, "Tesseract-OCR", "tesseract.exe")
+
+# TESSDATA_PATH: Pasta com os arquivos de idioma do Tesseract (ex: por.traineddata, eng.traineddata).
+# ⚠️ Se o Tesseract estiver instalado em outro lugar, ajuste este caminho também.
+TESSDATA_PATH = os.path.join(BASE_DIR, "Tesseract-OCR", "tessdata")
+
+# Informa ao pytesseract onde está o executável do Tesseract
+pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+
+# Informa ao Tesseract onde estão os arquivos de idioma
+os.environ["TESSDATA_PREFIX"] = TESSDATA_PATH
+
+# Configura o sistema de logs para exibir mensagens no terminal
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+log = logging.getLogger(__name__)
+
+
+# ==========================
+# FUNÇÕES
+# ==========================
+
+def extrair_texto_pdf(caminho_pdf: str) -> str:
+    
+    #Converte cada página do PDF em imagem e usa OCR para extrair o texto.
+    #Tenta primeiro com o idioma português ('por'), e se falhar, tenta com inglês ('eng').
+    #Retorna o texto completo do PDF como string.
+    
+    try:
+        # Converte o PDF em uma lista de imagens (uma por página)
+        paginas = convert_from_path(caminho_pdf, poppler_path=POPPLER_PATH, dpi=300)
+    except Exception as e:
+        log.error(f"❌ Erro ao abrir PDF: {e}")
+        return ""
+
+    texto_completo = ""
+    for i, pagina in enumerate(paginas):
+        try:
+            # Tenta extrair o texto da página usando português
+            texto = pytesseract.image_to_string(pagina, lang="por")
+        except Exception:
+            try:
+                # Se o idioma português não estiver disponível, tenta inglês
+                log.warning("⚠️ 'por' falhou, usando inglês...")
+                texto = pytesseract.image_to_string(pagina, lang="eng")
+            except Exception as e:
+                log.error(f"❌ Erro OCR página {i}: {e}")
+                continue
+        texto_completo += texto + "\n"
+    return texto_completo
+
+
+def extrair_cpf(texto: str) -> str | None:
+    """
+    Procura no texto um número no formato de CPF (ex: 123.456.789-09 ou 12345678909).
+    Se encontrar, retorna apenas os 11 dígitos numéricos.
+    Se não encontrar nenhum padrão, retorna None.
+    """
+    # Padrão que aceita CPF com ou sem pontos e traço
+    padrao = r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}'
+    resultado = re.search(padrao, texto)
+    if resultado:
+        # Remove todos os caracteres não numéricos (pontos e traço)
+        cpf = re.sub(r"\D", "", resultado.group())
+        return cpf
+    return None
+
+
+def extrair_data(texto: str) -> str | None:
+    
+    #Procura no texto uma data no formato DD/MM/AAAA.
+    #Se encontrar, retorna a data com barras substituídas por underline (ex: 22_03_2026),
+    #pois barras não são permitidas em nomes de arquivo.
+    #Se não encontrar, retorna None.
+    
+    padrao = r'\d{2}/\d{2}/\d{4}'
+    resultado = re.search(padrao, texto)
+    if resultado:
+        return resultado.group().replace("/", "_")
+    return None
+
+
+def ja_esta_no_formato(nome_arquivo: str) -> bool:
+    
+    #Verifica se o arquivo já está no formato esperado: '12345678909 - 22_03_2026.pdf'.
+    #Se já estiver nesse formato, o arquivo será ignorado para evitar reprocessamento.
+    
+    padrao = r'^\d{11} - \d{2}_\d{2}_\d{4}\.pdf$'
+    return re.match(padrao, nome_arquivo) is not None
+
+
+def mover_para_sem_cpf(caminho: str) -> None:
+    
+    #Move o arquivo informado para a pasta 'Sem CPF'.
+    #Se já existir um arquivo com o mesmo nome nessa pasta, exibe um aviso e não move.
+    
+    destino = os.path.join(PASTA_SEM_CPF, os.path.basename(caminho))
+    if os.path.exists(destino):
+        log.warning(f"⚠️ Já existe em 'Sem CPF': {os.path.basename(caminho)}")
+        return
+    shutil.move(caminho, destino)
+    log.info(f"📁 Movido para 'Sem CPF': {os.path.basename(caminho)}")
+
+
+def renomear_arquivo(caminho: str, cpf: str, data: str) -> bool:
+    
+    #Renomeia o arquivo para o formato 'CPF - DATA.pdf' (ex: '12345678909 - 22_03_2026.pdf').
+    #Se já existir um arquivo com esse nome na pasta, exibe um aviso e não renomeia.
+    #Retorna True se renomeou com sucesso, False caso contrário.
+    
+    pasta = os.path.dirname(caminho)
+    extensao = os.path.splitext(caminho)[1]
+    novo_nome = f"{cpf} - {data}{extensao}"
+    novo_caminho = os.path.join(pasta, novo_nome)
+
+    if os.path.exists(novo_caminho):
+        log.warning(f"⚠️ Já existe: {novo_nome} (original: {os.path.basename(caminho)})")
+        return False
+
+    os.rename(caminho, novo_caminho)
+    log.info(f"✅ Renomeado: {novo_nome}")
+    return True
+
+
+# ==========================
+# EXECUÇÃO
+# ==========================
+
+def main():
+    
+    #Função principal. Percorre todos os PDFs da pasta Documentos e:
+    #- Ignora os que já estão no formato correto
+    #- Renomeia os que têm CPF e data
+    #- Move para 'Sem CPF' os que não têm CPF
+    #- Registra falha nos que não têm data ou não conseguiram ser lidos
+    
+    log.info("🚀 Iniciando processamento...\n")
+
+    # Verifica se a pasta de PDFs existe
+    if not os.path.exists(PASTA_PDFS):
+        log.error(f"❌ Pasta não encontrada: {PASTA_PDFS}")
+        return
+
+    # Lista apenas arquivos .pdf diretamente na pasta (ignora subpastas como "Sem CPF")
+    arquivos = [
+        f for f in os.listdir(PASTA_PDFS)
+        if f.lower().endswith(".pdf") and os.path.isfile(os.path.join(PASTA_PDFS, f))
+    ]
+
+    if not arquivos:
+        log.warning("⚠️ Nenhum PDF encontrado.")
+        return
+
+    # Contadores para o resumo final
+    total = len(arquivos)
+    renomeados = 0
+    sem_cpf = 0
+    falhas = 0
+
+    for arquivo in arquivos:
+        # Pula arquivos que já estão no formato correto
+        if ja_esta_no_formato(arquivo):
+            log.info(f"✔️ Já formatado: {arquivo}")
+            continue
+
+        caminho_pdf = os.path.join(PASTA_PDFS, arquivo)
+        log.info(f"\n📄 Lendo: {arquivo}")
+
+        # Extrai o texto do PDF via OCR
+        texto = extrair_texto_pdf(caminho_pdf)
+        if not texto.strip():
+            log.error("❌ Não conseguiu extrair texto.")
+            falhas += 1
+            continue
+
+        # Tenta encontrar CPF e data no texto extraído
+        cpf = extrair_cpf(texto)
+        data = extrair_data(texto)
+
+        # Se não encontrou CPF, move para a pasta "Sem CPF" e passa pro próximo
+        if not cpf:
+            log.warning(f"⚠️ CPF não encontrado em: {arquivo}")
+            mover_para_sem_cpf(caminho_pdf)
+            sem_cpf += 1
+            continue
+
+        # Se encontrou CPF e data, renomeia o arquivo
+        if data:
+            if renomear_arquivo(caminho_pdf, cpf, data):
+                renomeados += 1
+        else:
+            log.error(f"❌ Data não encontrada em: {arquivo}")
+            falhas += 1
+
+    # Exibe resumo final
+    log.info(f"\n🎉 Finalizado! {renomeados}/{total} renomeados | {sem_cpf} sem CPF | {falhas} falhas")
+
+
+if __name__ == "__main__":
+    main()
